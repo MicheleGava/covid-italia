@@ -7,7 +7,9 @@ from datetime import datetime
 import dash
 import dash_core_components as dcc 
 import dash_html_components as html 
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
+
 import plotly.express as px 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -127,57 +129,88 @@ fig_1_2_1.update_layout(title_text='Ospedalizzati')
 ### Inizio App      ###
 #######################
 
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.GRID])
 
-app.layout = html.Div(children = [
-    html.H1(children='Covid 19 Italia'),
-    html.Div(  # grafico casi con intervallo di selezione
-        [
-            #html.Div(["Periodo:", dcc.DatePickerRange(id='periodo', display_format='DD-MM-YYYY', start_date=first_date, end_date=last_date)]),
-            dcc.RangeSlider(
-                id = 'periodo',
-                min = 0,
-                max = delta_t,
-                step = 1,
-                value = [0, delta_t]
-            ),
-            dcc.Graph(id='gn_casi')
-        ]
-    ),
-    # dcc.Graph(
-    #     id='gn_casi',
-    #     figure=fig_1_1_1 
-    # ),
-    dcc.Graph(
-        id='gn_decessi',
-        figure=fig_1_1_2 
-    ),
-    dcc.Graph(
-        id='gn_osp',
-        figure=fig_1_2_1 
-    )
+app.layout = html.Div([
+    dbc.Row(dbc.Col(html.H1('Covid 19 Italia'))),
+    dbc.Row([
+        dbc.Col(html.P("Selezione periodo:"), width=2),
+        dbc.Col(dcc.RangeSlider(
+            id = 'periodo',
+            min = 0,
+            max = delta_t,
+            step = 1,
+            value = [0, delta_t]
+            ), width=10)
+    ]),
 
-])
+    dbc.Row([
+        dbc.Col(dcc.Graph(id='gn_casi'), width=6),
+        dbc.Col(dcc.Graph(id='gn_decessi'), width=6)
+    ]),
 
-@app.callback(
+    dbc.Row([
+        dbc.Col(dcc.Graph(id='gn_osp'), width=6),
+        dbc.Col(
+            dbc.Card(
+                dbc.CardBody([
+                    html.P("Ultimo aggiornamento:"),
+                    html.H4(last_date),
+                    html.P("Variazione % positivi:"),
+                    html.H4("{:+.2f}%".format(delta_pos)),
+                    html.P("Variazione % decessi:"),
+                    html.H4("{:+.2f}%".format(delta_dec))
+                ])
+            )
+        )
+    ])
+])    
+
+
+@app.callback([
     Output('gn_casi','figure'),
+    Output('gn_decessi','figure'),
+    Output('gn_osp','figure')
+],
     [Input('periodo','value')]
 )
-def update_gn_casi(value):
+def update_gn(value):
     data_da = first_date + pd.Timedelta(value[0], unit='days')
     data_a  = first_date + pd.Timedelta(value[1], unit='days')
     filtered_df = df_nazionali[(df_nazionali.data >= data_da) & (df_nazionali.data <= data_a)]
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-    fig.add_trace(
+    #plot nuovi positivi
+    fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig1.add_trace(
        go.Scatter(x=filtered_df["data"], y=filtered_df["nuovi_positivi"], name='Nr. assoluto'), 
        secondary_y=False
     )
-    fig.add_trace(
+    fig1.add_trace(
        go.Scatter(x=filtered_df["data"], y=100*filtered_df["nuovi_positivi"]/filtered_df["nuovi_tamponi"], name='% su tamponi'),
        secondary_y=True
     )
-    fig.update_layout(title_text='Nuovi positivi')
-    return fig 
+    fig1.update_layout(title_text='Nuovi positivi')
+    #plot decessi
+    fig2 = make_subplots()
+    fig2.add_trace(
+        go.Scatter(x=filtered_df["data"], y=filtered_df["nuovi_decessi"],name='Nr. assoluto',opacity=0.5)
+    )
+    fig2.add_trace(
+        go.Scatter(x=filtered_df["data"], y=filtered_df["decessi_media_mobile"],name='Media mobile settimanale')
+    )
+    fig2.update_layout(title_text='Decessi')
+    #plot ospedalizzati
+    fig3 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig3.add_trace(
+        go.Scatter(x=filtered_df["data"], y=filtered_df["totale_ospedalizzati"],name='Totale ospedalizzati'), 
+        secondary_y=False
+    )
+    fig3.add_trace(
+        go.Bar(x=filtered_df["data"], y=filtered_df["terapia_intensiva"],name='Terapia intensiva', opacity=0.5), 
+        secondary_y=True
+    )
+    fig3.update_layout(title_text='Ospedalizzati')
+
+    return fig1, fig2, fig3
 
 if __name__ == '__main__':
     app.run_server(debug=True)
