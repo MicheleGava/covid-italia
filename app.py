@@ -131,6 +131,8 @@ fig_1_2_1.update_layout(title_text='Ospedalizzati')
 
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.GRID])
 
+server = app.server
+
 app.layout = html.Div([
     dbc.Row(dbc.Col(html.H1('Covid 19 Italia'))),
     dbc.Row([
